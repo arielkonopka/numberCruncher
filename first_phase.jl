@@ -145,10 +145,33 @@ function create_plots(embedded::StateSpaceSet)
     return phase_space_plot, recurrence_plot
 end
 
+
+function find_neighboors(embedded, point::Vector{Float64}, ε::Float64)
+    # Find neighbors within ε distance
+    distances = sqrt.(sum((embedded .- point).^2, dims=2))
+    return findall(x -> x <= ε, distances)
+end
+
+
+
+"""
+
+"""
+function estimate_next_values(embedded, n::Int=10)
+    output::Vector{Float64} = Vector{Float64}(undef, n)
+    last_point=embedded[end]
+    neigh= find_neighboors(embedded, last_point, 0.1 * std(Matrix(embedded)))
+    #
+    # 
+    #
+
+    return output
+end
+
 # Main function that performs the complete analysis
-function main(embed::Bool=false)
+function main(use_manual_embed::Bool=false)
     # Load data
-    filename = "./raw_Data_2024-09-30.csv"
+    filename = "/home/dev/bitcoin_hourly_data_cryptocompare_2024-09-30.csv"
     df = load_data(filename)
     
     # Add delta columns
@@ -156,22 +179,37 @@ function main(embed::Bool=false)
     
     # Get data for embedding
     dO = skipmissing(vec(df.deltaO)) |> collect
-    if embed == true  
-          half_idx = Int(floor(length(dO)/3)) + 1
-          dO_jittered = dO[half_idx:end] .+ 1e-12 .* randn(length(dO[half_idx:end]))
-    # Get optimal embedding parameters using PECUZAL
-          embedded, τ_vals, ts_vals, Ls, εs = create_automatic_embedding(dO_jittered)
-    else
-          embedded = create_phase_space(df, tau=43, n=3)
-    end
+       
+    # Podział na ćwiartki
+    quarter_length = Int(floor(length(dO)/4))
+    results = []
 
-    # Create plots
-    phase_plot, rec_plot = create_plots(embedded)
+    for i in 1:4
+        start_idx = (i-1) * quarter_length + 1
+        end_idx = min(i * quarter_length, length(dO))
+        
+        dO_quarter = dO[start_idx:end_idx]
+        dO_jittered = dO_quarter .+ 1e-13 .* randn(length(dO_quarter))
+        
+        if use_manual_embed
+            embedded, τ_vals, ts_vals, Ls, εs = create_automatic_embedding(dO_jittered)
+            push!(results, (embedded, τ_vals, Ls))
+        else
+            embedded = create_phase_space(df[start_idx:end_idx], tau=43, n=3)
+            push!(results, embedded)
+        end
+    end
     
-    # Display plots
-    display(phase_plot)
-    display(rec_plot)
-    
+    println(results)
+
+    #if ndims(embedded)==3
+     #   # Create plots
+    #    phase_plot, rec_plot = create_plots(embedded)
+    #    # Display plots
+    ##    display(phase_plot)
+    #end
+    #display(rec_plot)
+    println("Press enter to end")
     readline()
 end
 
